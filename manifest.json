@@ -1,0 +1,10 @@
+{
+  "name": "Talleres · Centro Comunitario Cuarta Sección",
+  "short_name": "Talleres",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#3730a3",
+  "lang": "es-MX",
+  "icons": [{ "src": "icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

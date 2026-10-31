@@ -1,0 +1,19 @@
+# Sistema y editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Dependencias y logs (por si se agregan después)
+node_modules/
+*.log
+
+# Nunca subir datos reales de inscritos ni credenciales
+*.xlsx
+*.xls
+*.csv
+.env
+.env.*
+.clasp.json
+.clasprc.json
