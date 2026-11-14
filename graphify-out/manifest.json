@@ -1,0 +1,38 @@
+{
+  "app.js": {
+    "mtime": 1794084836.730353,
+    "seen": 1794085105.1012201,
+    "ast_hash": "935efe615be3b8653cb743433a1fdcb0",
+    "semantic_hash": "935efe615be3b8653cb743433a1fdcb0"
+  },
+  "datos.js": {
+    "mtime": 1794084836.7304823,
+    "seen": 1794085105.101223,
+    "ast_hash": "06ad3c1951038fa6fdf2a1efd1ca706d",
+    "semantic_hash": "06ad3c1951038fa6fdf2a1efd1ca706d"
+  },
+  "manifest.json": {
+    "mtime": 1794084836.7308996,
+    "seen": 1794085105.101224,
+    "ast_hash": "f3f74ea62577d221992ab5c6ec64fc2c",
+    "semantic_hash": "f3f74ea62577d221992ab5c6ec64fc2c"
+  },
+  "sw.js": {
+    "mtime": 1794084836.730974,
+    "seen": 1794085105.101225,
+    "ast_hash": "28d70295cfcb78a3eba478b9f5e5ea5a",
+    "semantic_hash": "28d70295cfcb78a3eba478b9f5e5ea5a"
+  },
+  "LEEME.md": {
+    "mtime": 1794084836.7302372,
+    "seen": 1794085105.101226,
+    "ast_hash": "66e0124f3914f78eafe49740b617ba7c",
+    "semantic_hash": "66e0124f3914f78eafe49740b617ba7c"
+  },
+  "index.html": {
+    "mtime": 1794084836.7308156,
+    "seen": 1794085105.101226,
+    "ast_hash": "0f57e88efaed1aa121be4ee83e01e4ea",
+    "semantic_hash": "0f57e88efaed1aa121be4ee83e01e4ea"
+  }
+}
