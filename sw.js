@@ -1,6 +1,6 @@
 // Service worker: guarda la página en el celular para que abra sin señal.
-const CACHE = "talleres-v2";
-const ARCHIVOS = ["./", "./index.html", "./app.js", "./datos.js", "./manifest.json", "./icono.svg"];
+const CACHE = "talleres-v4";
+const ARCHIVOS = ["./", "./index.html", "./app.js", "./datos.js", "./manifest.json", "./icono.svg", "./logocc.jpg"];
 
 self.addEventListener("install", e => {
   // Tailwind viene de internet; si no carga, la instalación sigue igual.

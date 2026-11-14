@@ -1,70 +1,68 @@
-// Lógica de la landing: calcula cupos y estados, pinta tarjetas, filtros,
-// detalle y el formulario de pre-registro / lista de espera.
+// Lógica de la landing: estados y cupos, filtros por categoría, detalle,
+// formulario de pre-registro (solo interés), comprobante por WhatsApp y catálogo en PDF.
 
-// Cuando exista el backend, poner aquí la URL de Apps Script y listo.
 const URL_API = "https://script.google.com/macros/s/AKfycbxxAGCWZv0G1L5NnFexd7EhV5d-GipMzONM6tb2uYL10yF0jKAHtFm7xbdPzqxVAFS7/exec";
-const CLAVE_COPIA = "talleres-copia";
-// Sin backend se usa una fecha fija para que los datos de ejemplo se vean bien.
-const HOY = URL_API ? new Date() : new Date("2026-10-30T12:00:00");
+const CLAVE_COPIA = "talleres-copia-v2";
+const EDAD_TUTOR = 17; // 17 años o menos: se piden datos del tutor
+const HOY = new Date();
 
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const aFecha = (s) => new Date(s + "T12:00:00");
-const fechaLarga = (s) => { const d = aFecha(s); return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`; };
-const fechaCorta = (s) => { const d = aFecha(s); return `${d.getDate()} ${MESES[d.getMonth()].slice(0,3)}.`; };
-const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fechaLarga = (s) => { if (!s) return "Por definir"; const d = aFecha(s); return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`; };
+const fechaCorta = (s) => { if (!s) return "por definir"; const d = aFecha(s); return `${d.getDate()} ${MESES[d.getMonth()].slice(0,3)}.`; };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
+const leer = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
 
-// Estado de cada apertura. Esto mismo lo hará Apps Script en la versión real.
-// Regla del centro: no se entra a un taller ya comenzado; va a lista de espera.
-function calcular(a) {
-  const taller = datos.talleres.find(t => t.id === a.taller);
-  const disponibles = Math.max(a.cupo - a.ocupados, 0);
-  const comenzado = aFecha(a.inicio) <= HOY;
+const ICONO_CAT = {
+  "Niños y Jóvenes": "🧒", "Belleza y Cuidado Personal": "💅", "Cocina y Repostería": "🧁",
+  "Tecnología e Innovación": "💻", "Oficios y Capacitación CECATI": "🛠️",
+  "Manualidades y Emprendimiento": "🧵", "Deportes y Bienestar Adultos": "🏃"
+};
+
+// Estado de cada taller según sus fechas y cupos (vienen de la pestaña del taller).
+function calcular(t) {
+  const disponibles = Math.max((t.cupo || 0) - (t.ocupados || 0), 0);
   let estado = "Disponible";
-  if (comenzado) estado = "En curso";
+  if (!t.inicio) estado = "Por definir";
+  else if (t.fin && aFecha(t.fin) < HOY) estado = "Terminado";
+  else if (aFecha(t.inicio) <= HOY) estado = "En curso";
   else if (disponibles === 0) estado = "Cupo lleno";
   else if (disponibles <= 3) estado = "Últimos lugares";
-  const diasParaIniciar = (aFecha(a.inicio) - HOY) / 86400000;
-  return {
-    ...a, taller: taller, nombre: `${taller.nombre} · ${a.periodo}`,
-    disponibles, estado,
-    abierto: !comenzado && disponibles > 0,
-    proximo: !comenzado && disponibles > 0 && diasParaIniciar <= 14
-  };
-}
-
-// La siguiente apertura del mismo taller (para la lista de espera).
-function siguienteApertura(a) {
-  return datos.aperturas
-    .filter(x => x.taller.id === a.taller.id && aFecha(x.inicio) > aFecha(a.inicio))
-    .sort((x, y) => aFecha(x.inicio) - aFecha(y.inicio))[0] || null;
+  return { ...t, id: t.pestana, disponibles, estado, conLugares: estado === "Disponible" || estado === "Últimos lugares" };
 }
 
 const ESTILO_ESTADO = {
   "Disponible": "bg-emerald-100 text-emerald-800",
   "Últimos lugares": "bg-amber-100 text-amber-800",
   "Cupo lleno": "bg-rose-100 text-rose-800",
-  "En curso": "bg-sky-100 text-sky-800"
+  "En curso": "bg-sky-100 text-sky-800",
+  "Terminado": "bg-slate-200 text-slate-700",
+  "Por definir": "bg-slate-100 text-slate-600"
 };
-const COLOR_BARRA = { "Disponible": "bg-emerald-500", "Últimos lugares": "bg-amber-500", "Cupo lleno": "bg-rose-500", "En curso": "bg-sky-500" };
+const COLOR_BARRA = { "Disponible": "bg-emerald-500", "Últimos lugares": "bg-amber-500", "Cupo lleno": "bg-rose-500", "En curso": "bg-sky-500", "Terminado": "bg-slate-400", "Por definir": "bg-slate-300" };
 
 let datos = null;
 let filtro = "Todos";
+let busqueda = "";
 
 async function cargar() {
   try {
-    if (!URL_API) throw new Error("sin backend todavía");
     const r = await fetch(URL_API);
-    datos = await r.json();
-    localStorage.setItem(CLAVE_COPIA, JSON.stringify(datos));
+    const j = await r.json();
+    if (!j.talleres) throw new Error("respuesta sin talleres");
+    datos = j;
+    guardar(CLAVE_COPIA, JSON.stringify(datos));
   } catch (e) {
-    // Sin backend o sin señal: usar la última copia guardada, o los datos de ejemplo.
+    // Sin señal: usar la última copia guardada, o los datos de ejemplo.
     let copia = null;
-    try { copia = JSON.parse(localStorage.getItem(CLAVE_COPIA)); } catch (_) {}
+    try { copia = JSON.parse(leer(CLAVE_COPIA)); } catch (_) {}
     datos = copia || structuredClone(DATOS_EJEMPLO);
+    datos.sinConexion = true;
   }
-  // Primero las que aceptan pre-registro; los grupos en curso o llenos van al final.
-  datos.aperturas = datos.aperturas.map(calcular)
-    .sort((a, b) => (b.abierto - a.abierto) || (aFecha(a.inicio) - aFecha(b.inicio)));
+  const orden = { "Disponible": 0, "Últimos lugares": 1, "Cupo lleno": 2, "En curso": 3, "Por definir": 4, "Terminado": 5 };
+  datos.talleres = datos.talleres.map(calcular)
+    .sort((a, b) => (orden[a.estado] - orden[b.estado]) || (a.inicio || "9").localeCompare(b.inicio || "9") || a.nombre.localeCompare(b.nombre));
   pintarTodo();
 }
 
@@ -74,170 +72,145 @@ function linkWhatsApp(texto) {
 }
 
 function pintarTodo() {
-  const abiertas = datos.aperturas.filter(a => a.abierto);
-  document.getElementById("num-talleres").textContent = `${datos.talleres.length} talleres · ${abiertas.length} con lugares`;
+  const conLugares = datos.talleres.filter(t => t.conLugares);
+  document.getElementById("num-talleres").textContent = `${datos.talleres.length} talleres · ${conLugares.length} con lugares`;
   document.getElementById("actualizado").textContent =
-    "Actualizado " + new Date(datos.actualizado).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+    (datos.sinConexion ? "Sin conexión · copia del " : "Actualizado ") +
+    new Date(datos.actualizado).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
   document.querySelectorAll("[data-wa-general]").forEach(a => a.href = linkWhatsApp());
   document.getElementById("maps").href = datos.config.maps;
   document.getElementById("direccion").textContent = datos.config.direccion;
   document.getElementById("telefono").textContent = "Teléfono: " + datos.config.telefono;
-  document.querySelectorAll("[data-dias-apartado]").forEach(e => e.textContent = datos.config.diasApartado);
   ["facebook","instagram","youtube"].forEach(r => document.getElementById(r).href = datos.config[r]);
-  const destacada = abiertas[0] || datos.aperturas[0];
-  pintarResumen(destacada);
+  document.querySelectorAll("[data-aviso]").forEach(e => e.textContent = datos.config.aviso || "");
+  document.getElementById("pdf-categoria").innerHTML = `<option value="">Todas las categorías</option>` +
+    datos.categorias.map(c => `<option>${esc(c)}</option>`).join("");
+  const destacado = conLugares[0] || datos.talleres[0];
+  if (destacado) { pintarResumen(destacado); mostrarDetalle(destacado.id); }
   pintarFiltros();
   pintarTarjetas();
-  pintarDocumentos();
-  mostrarDetalle(destacada.id);
 }
 
-function pintarResumen(a) {
+function pintarResumen(t) {
   document.getElementById("resumen").innerHTML = `
     <div class="flex items-center justify-between">
       <p class="text-xs font-semibold tracking-widest text-slate-500">PRÓXIMO TALLER CON LUGARES</p>
       <span class="text-xs text-emerald-700">● Actualizado</span>
     </div>
-    <p class="mt-3 text-xl font-bold">${esc(a.taller.nombre)}</p>
-    <p class="text-sm text-slate-500">${esc(a.periodo)} · Inicia ${fechaCorta(a.inicio)}</p>
+    <p class="mt-3 text-xl font-bold">${esc(t.nombre)}</p>
+    <p class="text-sm text-slate-500">${esc(t.categoria)} · Inicia ${fechaCorta(t.inicio)}</p>
+    <p class="text-sm text-slate-500">${esc(t.dias)} · ${esc(t.horario)}</p>
     <div class="mt-4 grid grid-cols-3 gap-3 text-center">
-      <div class="rounded-xl bg-slate-100 p-3"><p class="text-2xl font-bold">${a.cupo}</p><p class="text-xs text-slate-500">Cupo total</p></div>
-      <div class="rounded-xl bg-slate-100 p-3"><p class="text-2xl font-bold">${a.ocupados}</p><p class="text-xs text-slate-500">Ocupados</p></div>
-      <div class="rounded-xl bg-emerald-50 p-3"><p class="text-2xl font-bold text-emerald-700">${a.disponibles}</p><p class="text-xs text-slate-500">Disponibles</p></div>
+      <div class="rounded-xl bg-slate-100 p-3"><p class="text-2xl font-bold">${t.cupo}</p><p class="text-xs text-slate-500">Cupo total</p></div>
+      <div class="rounded-xl bg-slate-100 p-3"><p class="text-2xl font-bold">${t.ocupados}</p><p class="text-xs text-slate-500">Inscritos</p></div>
+      <div class="rounded-xl bg-emerald-50 p-3"><p class="text-2xl font-bold text-emerald-700">${t.disponibles}</p><p class="text-xs text-slate-500">Disponibles</p></div>
     </div>
-    <button onclick="abrirFormulario('${a.id}')" class="mt-4 w-full rounded-xl bg-indigo-700 py-2.5 font-semibold text-white hover:bg-indigo-800">Pre-registrarme</button>`;
+    <button onclick="abrirFormulario('${esc(t.id)}')" class="mt-4 w-full rounded-xl bg-indigo-700 py-2.5 font-semibold text-white hover:bg-indigo-800">Pre-registrarme</button>`;
 }
 
-const FILTROS = {
-  "Todos": () => true,
-  "Adultos": a => a.taller.grupo === "Adultos",
-  "Niños": a => a.taller.grupo === "Niños",
-  "Con lugares": a => a.abierto,
-  "Próximos a iniciar": a => a.proximo
-};
+function filtros() {
+  const f = { "Todos": () => true, "Con lugares": t => t.conLugares };
+  datos.categorias.forEach(c => f[c] = t => t.categoria === c);
+  return f;
+}
 
 function pintarFiltros() {
-  document.getElementById("filtros").innerHTML = Object.keys(FILTROS).map(f => `
-    <button onclick="cambiarFiltro('${f}')"
-      class="rounded-full px-4 py-1.5 text-sm font-medium transition ${f === filtro ? "bg-indigo-700 text-white" : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"}">${f}</button>`).join("");
+  document.getElementById("filtros").innerHTML = Object.keys(filtros()).map(f => `
+    <button onclick="cambiarFiltro(this.dataset.f)" data-f="${esc(f)}"
+      class="rounded-full px-4 py-1.5 text-sm font-medium transition ${f === filtro ? "bg-indigo-700 text-white" : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"}">${ICONO_CAT[f] ? ICONO_CAT[f] + " " : ""}${esc(f)}</button>`).join("");
 }
 
 function cambiarFiltro(f) { filtro = f; pintarFiltros(); pintarTarjetas(); }
-
-function botonAccion(a, clases) {
-  return a.abierto
-    ? `<button onclick="abrirFormulario('${a.id}')" class="${clases} bg-indigo-700 text-white hover:bg-indigo-800">Pre-registro</button>`
-    : `<button onclick="abrirFormulario('${a.id}')" class="${clases} bg-white text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50">Lista de espera</button>`;
-}
+function buscar(v) { busqueda = v.trim().toLowerCase(); pintarTarjetas(); }
+const sinAcentos = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 function pintarTarjetas() {
-  const lista = datos.aperturas.filter(FILTROS[filtro]);
-  document.getElementById("tarjetas").innerHTML = lista.length ? lista.map(a => {
-    const pct = Math.round(a.ocupados / a.cupo * 100);
-    const nota = a.estado === "En curso" ? "Ya comenzó · entra a la siguiente apertura"
-      : a.estado === "Cupo lleno" ? "Sin lugares · lista de espera"
-      : `Pre-registro hasta el ${fechaCorta(a.inicio)}`;
+  const q = sinAcentos(busqueda);
+  const lista = datos.talleres.filter(filtros()[filtro]).filter(t => !q || sinAcentos(t.nombre + " " + t.categoria).includes(q));
+  document.getElementById("tarjetas").innerHTML = lista.length ? lista.map(t => {
+    const pct = t.cupo ? Math.min(100, Math.round(t.ocupados / t.cupo * 100)) : 0;
+    const nota = t.conLugares ? `Inicia el ${fechaCorta(t.inicio)}`
+      : t.estado === "Por definir" ? "Fechas por definir"
+      : "Puedes pre-registrarte como interesado para el siguiente ciclo";
     return `
     <article class="flex flex-col rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
       <div class="flex items-center justify-between gap-2">
-        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">${esc(a.taller.categoria)} · ${esc(a.taller.grupo)}</p>
-        <span class="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${ESTILO_ESTADO[a.estado]}">${a.estado}</span>
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">${ICONO_CAT[t.categoria] || ""} ${esc(t.categoria)}</p>
+        <span class="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${ESTILO_ESTADO[t.estado]}">${t.estado}</span>
       </div>
-      <h3 class="mt-2 text-lg font-bold">${esc(a.taller.nombre)}</h3>
-      <p class="text-sm font-medium text-indigo-700">${esc(a.periodo)}</p>
-      <p class="mt-1 text-sm text-slate-600">Inicia ${fechaCorta(a.inicio)} · Termina ${fechaCorta(a.fin)}</p>
-      <p class="text-sm text-slate-600">${esc(a.horario)}</p>
-      <div class="mt-4 h-2 rounded-full bg-slate-100"><div class="h-2 rounded-full ${COLOR_BARRA[a.estado]}" style="width:${pct}%"></div></div>
-      <div class="mt-2 flex justify-between text-sm">${a.estado === "En curso"
-        ? `<span>Grupo en curso</span>`
-        : `<span><b>${a.disponibles}/${a.cupo}</b> lugares disponibles</span>`}</div>
-      <p class="mt-1 text-sm text-slate-600">👥 <b>${a.ocupados}</b> ${a.ocupados === 1 ? "alumno inscrito" : "alumnos inscritos"}</p>
+      <h3 class="mt-2 text-lg font-bold">${esc(t.nombre)}</h3>
+      <p class="text-sm text-slate-600">${fechaCorta(t.inicio)} al ${fechaCorta(t.fin)}</p>
+      <p class="text-sm text-slate-600">${esc(t.dias)}${t.horario ? " · " + esc(t.horario) : ""}</p>
+      <div class="mt-4 h-2 rounded-full bg-slate-100"><div class="h-2 rounded-full ${COLOR_BARRA[t.estado]}" style="width:${pct}%"></div></div>
+      <p class="mt-2 text-sm"><b>${t.disponibles}/${t.cupo}</b> lugares disponibles</p>
       <p class="mt-1 text-xs text-slate-500">${nota}</p>
       <div class="mt-auto flex items-center justify-between gap-3 pt-4 text-sm">
-        <button onclick="verDetalle('${a.id}')" class="font-semibold text-indigo-700 hover:underline">Ver detalle</button>
-        ${botonAccion(a, "rounded-lg px-3 py-1.5 font-semibold")}
+        <button onclick="verDetalle(this.dataset.id)" data-id="${esc(t.id)}" class="font-semibold text-indigo-700 hover:underline">Ver detalle</button>
+        <button onclick="abrirFormulario(this.dataset.id)" data-id="${esc(t.id)}" class="rounded-lg bg-indigo-700 px-3 py-1.5 font-semibold text-white hover:bg-indigo-800">Pre-registro</button>
       </div>
     </article>`;
   }).join("") : `<p class="text-slate-500">No hay talleres con este filtro.</p>`;
 }
 
-// Ventanita con el detalle, encima de las tarjetas (no mueve la página).
 function verDetalle(id) {
-  const a = datos.aperturas.find(x => x.id === id);
-  document.getElementById("detalle-modal-cuerpo").innerHTML = htmlDetalle(a);
+  document.getElementById("detalle-modal-cuerpo").innerHTML = htmlDetalle(buscarTaller(id));
   document.getElementById("modal-detalle").showModal();
 }
-
 function cerrarDetalle() { document.getElementById("modal-detalle").close(); }
+function mostrarDetalle(id) { document.getElementById("detalle").innerHTML = htmlDetalle(buscarTaller(id)); }
+const buscarTaller = (id) => datos.talleres.find(x => x.id === id);
 
-// Detalle fijo de la sección "Información clara antes de venir".
-function mostrarDetalle(id) {
-  const a = datos.aperturas.find(x => x.id === id);
-  document.getElementById("detalle").innerHTML = htmlDetalle(a);
+function textoEdad(t) {
+  if (t.edadMin && t.edadMax) return `De ${t.edadMin} a ${t.edadMax} años`;
+  if (t.edadMin) return `A partir de ${t.edadMin} años`;
+  return "Todas las edades";
 }
 
-function htmlDetalle(a) {
-  const pct = Math.round(a.ocupados / a.cupo * 100);
-  const sig = a.abierto ? null : siguienteApertura(a);
-  const aviso = a.abierto ? "" : `
+function htmlDetalle(t) {
+  const pct = t.cupo ? Math.min(100, Math.round(t.ocupados / t.cupo * 100)) : 0;
+  const aviso = t.conLugares ? "" : `
     <p class="mt-6 rounded-xl bg-sky-50 p-4 text-sm text-sky-900 ring-1 ring-sky-200">
-      ${a.estado === "En curso" ? "Este grupo ya comenzó y no se aceptan nuevos alumnos." : "Este grupo ya no tiene lugares."}
-      Puedes anotarte en la <b>lista de espera</b> y tendrás prioridad para
-      ${sig ? `<b>${esc(sig.periodo)}</b> (inicia ${fechaLarga(sig.inicio)})` : "la siguiente apertura"}.
+      ${t.estado === "Cupo lleno" ? "Este grupo ya no tiene lugares." : t.estado === "Por definir" ? "Las fechas de este taller todavía no se publican." : "Este grupo ya comenzó."}
+      Puedes dejar tu pre-registro como interesado y te tomaremos en cuenta para el siguiente ciclo.
     </p>`;
   return `
     <div class="flex flex-wrap items-start justify-between gap-2 pr-8">
-      <div><h3 class="text-2xl font-bold">${esc(a.taller.nombre)}</h3><p class="font-medium text-indigo-700">${esc(a.periodo)}</p><p class="text-sm text-slate-500">${esc(datos.config.centro)}</p></div>
-      <span class="rounded-full px-3 py-1 text-sm font-medium ${ESTILO_ESTADO[a.estado]}">● ${a.estado}</span>
+      <div><h3 class="text-2xl font-bold">${esc(t.nombre)}</h3><p class="font-medium text-indigo-700">${ICONO_CAT[t.categoria] || ""} ${esc(t.categoria)}</p><p class="text-sm text-slate-500">${esc(textoEdad(t))}</p></div>
+      <span class="rounded-full px-3 py-1 text-sm font-medium ${ESTILO_ESTADO[t.estado]}">● ${t.estado}</span>
     </div>
+    <p class="mt-4 text-slate-700">${esc(t.descripcion)}</p>
     <dl class="mt-6 grid gap-5 sm:grid-cols-2">
-      <div><dt class="text-xs font-semibold tracking-wider text-slate-500">FECHA DE INICIO</dt><dd class="mt-1 font-semibold">${fechaLarga(a.inicio)}</dd></div>
-      <div><dt class="text-xs font-semibold tracking-wider text-slate-500">FECHA DE TÉRMINO</dt><dd class="mt-1 font-semibold">${fechaLarga(a.fin)}</dd></div>
-      <div><dt class="text-xs font-semibold tracking-wider text-slate-500">HORARIO DEL TALLER</dt><dd class="mt-1 font-semibold">${esc(a.horario)}</dd></div>
-      <div><dt class="text-xs font-semibold tracking-wider text-slate-500">LUGARES DISPONIBLES</dt><dd class="mt-1 font-semibold">${a.disponibles} de ${a.cupo}</dd></div>
+      <div><dt class="text-xs font-semibold tracking-wider text-slate-500">FECHA DE INICIO</dt><dd class="mt-1 font-semibold">${fechaLarga(t.inicio)}</dd></div>
+      <div><dt class="text-xs font-semibold tracking-wider text-slate-500">FECHA DE TÉRMINO</dt><dd class="mt-1 font-semibold">${fechaLarga(t.fin)}</dd></div>
+      <div><dt class="text-xs font-semibold tracking-wider text-slate-500">DÍAS Y HORARIO</dt><dd class="mt-1 font-semibold">${esc(t.dias) || "Por definir"}${t.horario ? " · " + esc(t.horario) : ""}</dd></div>
+      <div><dt class="text-xs font-semibold tracking-wider text-slate-500">LUGARES DISPONIBLES</dt><dd class="mt-1 font-semibold">${t.disponibles} de ${t.cupo}</dd></div>
     </dl>
-    <div class="mt-6 h-2.5 rounded-full bg-slate-100"><div class="h-2.5 rounded-full ${COLOR_BARRA[a.estado]}" style="width:${pct}%"></div></div>
-    <div class="mt-2 flex justify-between text-sm text-slate-600"><span>${a.ocupados} lugares ocupados</span><span>${pct}% del cupo</span></div>
+    <div class="mt-6 h-2.5 rounded-full bg-slate-100"><div class="h-2.5 rounded-full ${COLOR_BARRA[t.estado]}" style="width:${pct}%"></div></div>
+    <div class="mt-2 flex justify-between text-sm text-slate-600"><span>${t.ocupados} inscritos</span><span>${pct}% del cupo</span></div>
     ${aviso}
-    <div class="mt-6 flex flex-col gap-3 sm:flex-row">
-      <a href="${esc(a.taller.pdf)}" target="_blank" class="flex-1 rounded-xl px-4 py-3 text-center font-semibold ring-1 ring-slate-300 hover:bg-slate-50">📄 Requisitos PDF</a>
-      ${botonAccion(a, "flex-1 rounded-xl px-4 py-3 text-center font-semibold")}
-    </div>`;
+    <div class="mt-6 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      <p class="text-sm font-semibold">Documentos para terminar la inscripción en el centro</p>
+      <ul class="mt-2 list-inside list-disc text-sm text-slate-600">${(t.requisitos || []).map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+    </div>
+    <button onclick="abrirFormulario(this.dataset.id)" data-id="${esc(t.id)}" class="mt-6 w-full rounded-xl bg-indigo-700 px-4 py-3 text-center font-semibold text-white hover:bg-indigo-800">Pre-registro</button>`;
 }
 
-function pintarDocumentos() {
-  document.getElementById("lista-docs").innerHTML = datos.documentos.map(d => `
-    <article class="flex flex-col rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <span class="w-fit rounded-md bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-700">PDF</span>
-      <h3 class="mt-3 font-bold">${esc(d.nombre)}</h3>
-      <p class="mt-1 text-sm text-slate-600">${esc(d.descripcion)}</p>
-      <a href="${esc(d.pdf)}" target="_blank" class="mt-auto pt-4 text-sm font-semibold text-indigo-700 hover:underline">Descargar documento</a>
-    </article>`).join("");
-}
+// ---------- Formulario de pre-registro ----------
 
-// ---------- Formulario de pre-registro / lista de espera ----------
-
-let aperturaForm = null;
+let tallerForm = null;
 
 function abrirFormulario(id) {
   const det = document.getElementById("modal-detalle");
   if (det.open) det.close();
-  aperturaForm = datos.aperturas.find(x => x.id === id);
-  const a = aperturaForm;
-  const espera = !a.abierto;
-  const sig = espera ? siguienteApertura(a) : null;
-  const ninos = a.taller.grupo === "Niños";
-  document.getElementById("form-titulo").textContent = espera ? "Lista de espera" : "Pre-registro";
-  document.getElementById("form-taller").textContent = `${a.taller.nombre} · ${a.periodo}`;
-  document.getElementById("form-explica").innerHTML = espera
-    ? `Te anotamos con prioridad para ${sig ? `<b>${esc(sig.periodo)}</b> (inicia ${fechaLarga(sig.inicio)})` : "la siguiente apertura de este taller"}. Te llamaremos cuando abra.`
-    : `Apartamos tu lugar por <b>${datos.config.diasApartado} días</b>. Te llamaremos para decirte qué llevar y terminas tu inscripción en el centro.`;
-  document.getElementById("campos-nino").classList.toggle("hidden", !ninos);
-  document.querySelectorAll("#campos-nino input").forEach(i => i.required = ninos);
-  document.getElementById("lbl-nombre").textContent = ninos ? "Nombre de la mamá, papá o tutor" : "Nombre completo";
-  document.getElementById("lbl-telefono").textContent = ninos ? "Teléfono del tutor (10 dígitos)" : "Teléfono (10 dígitos)";
-  document.getElementById("btn-enviar").textContent = espera ? "Anotarme en lista de espera" : "Apartar mi lugar";
-  document.getElementById("form-preregistro").reset();
+  tallerForm = buscarTaller(id);
+  const t = tallerForm;
+  const f = document.getElementById("form-preregistro");
+  f.reset();
+  document.getElementById("form-taller").textContent = t.nombre;
+  document.getElementById("form-edad-texto").textContent = textoEdad(t);
+  f.auxiliar.innerHTML = `<option value="">Elige tu nombre…</option>` + datos.auxiliares.map(a => `<option>${esc(a)}</option>`).join("");
+  ajustarPorEdad();
+  ajustarCondicion();
   document.getElementById("form-error").classList.add("hidden");
   document.getElementById("paso-form").classList.remove("hidden");
   document.getElementById("paso-listo").classList.add("hidden");
@@ -246,70 +219,141 @@ function abrirFormulario(id) {
 
 function cerrarFormulario() { document.getElementById("modal").close(); }
 
+// 17 años o menos: aparece el nombre del tutor.
+function ajustarPorEdad() {
+  const f = document.getElementById("form-preregistro");
+  const edad = parseInt(f.edad.value, 10);
+  const menor = edad > 0 && edad <= EDAD_TUTOR;
+  document.getElementById("campo-tutor").classList.toggle("hidden", !menor);
+  f.tutor.required = menor;
+  document.getElementById("lbl-participante").textContent = menor ? "Nombre completo del niño, niña o joven" : "Nombre completo";
+  document.getElementById("lbl-telefono").textContent = menor ? "Teléfono del tutor (10 dígitos)" : "Teléfono (10 dígitos)";
+}
+
+function ajustarCondicion() {
+  const f = document.getElementById("form-preregistro");
+  const si = f.condicion.checked;
+  document.getElementById("campo-condicion").classList.toggle("hidden", !si);
+  f.condicionCual.required = si;
+}
+
+function errorForm(msg) {
+  const e = document.getElementById("form-error");
+  e.textContent = msg; e.classList.remove("hidden");
+}
+
 async function enviarPreregistro(ev) {
   ev.preventDefault();
   const f = ev.target;
-  const error = document.getElementById("form-error");
+  const t = tallerForm;
   const tel = f.telefono.value.replace(/\D/g, "");
-  if (tel.length !== 10) { error.textContent = "Escribe un teléfono de 10 dígitos."; error.classList.remove("hidden"); return; }
-  if (!navigator.onLine) { error.textContent = "Necesitas internet para pre-registrarte. Intenta de nuevo cuando tengas señal."; error.classList.remove("hidden"); return; }
+  const edad = parseInt(f.edad.value, 10);
+  if (!(edad > 0)) return errorForm("Escribe la edad.");
+  if (t.edadMin && edad < t.edadMin) return errorForm(`Este taller es a partir de ${t.edadMin} años.`);
+  if (t.edadMax && edad > t.edadMax) return errorForm(`Este taller es hasta los ${t.edadMax} años.`);
+  if (tel.length !== 10) return errorForm("Escribe un teléfono de 10 dígitos.");
+  if (!navigator.onLine) return errorForm("Se necesita internet para enviar el pre-registro. Intenta de nuevo cuando haya señal.");
 
-  const a = aperturaForm;
   const registro = {
-    apertura: a.id,
-    estado: a.abierto ? "Pre-registro" : "Lista de espera",
-    nombre: f.nombre.value.trim(),
+    pestana: t.pestana,
+    participante: f.participante.value.trim(),
+    tutor: edad <= EDAD_TUTOR ? f.tutor.value.trim() : "",
+    edad: edad,
+    comunidad: f.comunidad.value.trim(),
     telefono: tel,
-    alumno: f.alumno.value.trim(),
-    edad: f.edad.value
+    condicion: f.condicion.checked,
+    condicionCual: f.condicion.checked ? f.condicionCual.value.trim() : "",
+    auxiliar: f.auxiliar.value
   };
 
   const boton = document.getElementById("btn-enviar");
   boton.disabled = true; boton.textContent = "Enviando…";
   try {
-    let folio;
-    if (URL_API) {
-      // text/plain evita el bloqueo de CORS con Apps Script; doPost lee e.postData.contents.
-      const r = await fetch(URL_API, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(registro) });
-      const resp = await r.json();
-      if (!resp.ok) throw new Error(resp.mensaje || "No se pudo guardar");
-      folio = resp.folio;
-      registro.estado = resp.estado; // el servidor decide si fue pre-registro o lista de espera
-      cargar();                      // refresca cupos
-    } else {
-      // Prototipo: simula que se guardó.
-      await new Promise(r => setTimeout(r, 600));
-      folio = a.id + "-" + String(Math.floor(Math.random() * 900) + 100);
-      if (registro.estado === "Pre-registro") { a.ocupados++; Object.assign(a, calcular({ ...a, taller: a.taller.id })); pintarTarjetas(); mostrarDetalle(a.id); }
-    }
-    mostrarListo(registro, folio);
+    // text/plain evita el bloqueo de CORS con Apps Script; doPost lee e.postData.contents.
+    const r = await fetch(URL_API, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(registro) });
+    const resp = await r.json();
+    if (!resp.ok) throw new Error(resp.mensaje || "No se pudo guardar");
+    mostrarListo(registro, resp);
   } catch (e) {
-    error.textContent = "No pudimos guardar tu registro. Intenta otra vez o escríbenos por WhatsApp.";
-    error.classList.remove("hidden");
+    errorForm(e.message && !/fetch|json/i.test(e.message) ? e.message : "No pudimos guardar el pre-registro. Intenta otra vez.");
   } finally {
-    boton.disabled = false; boton.textContent = a.abierto ? "Apartar mi lugar" : "Anotarme en lista de espera";
+    boton.disabled = false; boton.textContent = "Enviar pre-registro";
   }
 }
 
-function mostrarListo(r, folio) {
-  const a = aperturaForm;
-  const espera = r.estado === "Lista de espera";
-  document.getElementById("listo-titulo").textContent = espera ? "¡Quedaste en lista de espera!" : "¡Listo, apartamos tu lugar!";
-  document.getElementById("listo-texto").innerHTML = espera
-    ? `Te llamaremos al <b>${r.telefono}</b> cuando abra la siguiente apertura de <b>${esc(a.taller.nombre)}</b>. Tendrás prioridad por haberte anotado.`
-    : `Te llamaremos al <b>${r.telefono}</b> para decirte qué documentos llevar. Acude al centro en los próximos <b>${datos.config.diasApartado} días</b> para terminar tu inscripción de <b>${esc(a.taller.nombre)} · ${esc(a.periodo)}</b>.`;
-  document.getElementById("listo-folio").textContent = folio;
-  document.getElementById("listo-wa").href = linkWhatsApp(`¡Hola! Hice mi ${espera ? "registro en lista de espera" : "pre-registro"} para ${a.taller.nombre} · ${a.periodo}. Mi folio es ${folio}.`);
+function textoComprobante(r, folio, requisitos) {
+  const t = tallerForm, c = datos.config;
+  return [
+    `*${c.centro}*`,
+    `Comprobante de PRE-REGISTRO`,
+    ``,
+    `Folio: *${folio}*`,
+    `Taller: ${t.nombre}`,
+    `Inicia: ${fechaLarga(t.inicio)} · ${t.dias || ""} ${t.horario || ""}`.trim(),
+    `Participante: ${r.participante}${r.tutor ? " (tutor: " + r.tutor + ")" : ""}`,
+    ``,
+    `⚠️ *AVISO IMPORTANTE:* ${c.aviso}`,
+    ``,
+    `Documentos que debes llevar:`,
+    ...(requisitos || t.requisitos || []).map(x => `• ${x}`),
+    ``,
+    `📍 ${c.direccion}`,
+    c.maps
+  ].join("\n");
+}
+
+function mostrarListo(r, resp) {
+  const t = tallerForm;
+  const requisitos = resp.requisitos || t.requisitos;
+  document.getElementById("listo-titulo").textContent = resp.repetido ? "Este pre-registro ya existía" : "¡Pre-registro enviado!";
+  document.getElementById("listo-texto").innerHTML =
+    `<b>${esc(r.participante)}</b> quedó como interesado en <b>${esc(t.nombre)}</b>.` +
+    (r.condicion ? ` Como indicó una condición especial, el centro lo canalizará a valoración con psicopedagogía antes de la inscripción.` : "");
+  document.getElementById("listo-folio").textContent = resp.folio;
+  document.getElementById("listo-docs").innerHTML = requisitos.map(x => `<li>${esc(x)}</li>`).join("");
+  document.getElementById("listo-wa").href = `https://wa.me/52${r.telefono}?text=${encodeURIComponent(textoComprobante(r, resp.folio, requisitos))}`;
   document.getElementById("paso-form").classList.add("hidden");
   document.getElementById("paso-listo").classList.remove("hidden");
 }
 
-// Aviso de "sin señal"
+function otroPreregistro() { abrirFormulario(tallerForm.id); }
+
+// ---------- Catálogo en PDF (se arma con los datos actuales y se usa "Guardar como PDF") ----------
+
+function descargarPDF() {
+  const cat = document.getElementById("pdf-categoria").value;
+  const c = datos.config;
+  const lista = datos.talleres.filter(t => t.estado !== "Terminado" && (!cat || t.categoria === cat));
+  const fecha = new Date(datos.actualizado).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
+  const secciones = datos.categorias.filter(k => lista.some(t => t.categoria === k)).map(k => `
+    <section class="pdf-seccion">
+      <h2>${ICONO_CAT[k] || ""} ${esc(k)}</h2>
+      ${lista.filter(t => t.categoria === k).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(t => `
+        <div class="pdf-ficha">
+          <div class="pdf-fila"><h3>${esc(t.nombre)}</h3><span>${t.estado === "Cupo lleno" ? "Cupo lleno" : `${t.disponibles} de ${t.cupo} lugares`}</span></div>
+          <p>${esc(t.descripcion)}</p>
+          <p><b>Fechas:</b> ${fechaLarga(t.inicio)} al ${fechaLarga(t.fin)} · <b>Días y horario:</b> ${esc(t.dias) || "Por definir"}${t.horario ? ", " + esc(t.horario) : ""}</p>
+          <p><b>Edad:</b> ${esc(textoEdad(t))} · <b>Lleva:</b> ${esc((t.requisitos || []).join(", "))}</p>
+        </div>`).join("")}
+    </section>`).join("");
+  document.getElementById("imprimible").innerHTML = `
+    <div class="pdf-portada">
+      <h1>Talleres disponibles</h1>
+      <p class="pdf-centro">${esc(c.centro)}</p>
+      <p>${cat ? esc(cat) + " · " : ""}Actualizado al ${fecha}${datos.sinConexion ? " (sin conexión: últimos datos guardados)" : ""}</p>
+      <p>${esc(c.direccion)} · WhatsApp ${esc(c.telefono)}</p>
+    </div>
+    ${secciones || "<p>No hay talleres en esta categoría.</p>"}
+    <p class="pdf-aviso"><b>AVISO IMPORTANTE:</b> ${esc(c.aviso)}</p>`;
+  window.print();
+}
+
+// ---------- Conexión y PWA ----------
+
 function avisoConexion() { document.getElementById("sin-senal").classList.toggle("hidden", navigator.onLine); }
 window.addEventListener("online", avisoConexion);
 window.addEventListener("offline", avisoConexion);
 
-// Registrar la PWA (solo funciona abriendo con Live Server o en Vercel, no con doble clic)
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.register("sw.js");
 }
