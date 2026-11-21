@@ -73,9 +73,8 @@
       <div id="resumen" class="rounded-3xl bg-white p-6 shadow-lg ring-1 ring-slate-200"></div>
     </section>
 
-    <div class="mx-auto grid max-w-6xl gap-4 px-4 sm:grid-cols-3">
+    <div class="mx-auto grid max-w-6xl gap-4 px-4 sm:grid-cols-2">
       <div class="rounded-2xl bg-white p-4 ring-1 ring-slate-200"><p id="num-talleres" class="font-bold">— talleres</p><p class="text-sm text-slate-500" id="actualizado">Cargando…</p></div>
-      <div class="rounded-2xl bg-white p-4 ring-1 ring-slate-200"><p class="font-bold">En línea y sin señal</p><p class="text-sm text-slate-500">El catálogo se guarda en el celular</p></div>
       <div class="rounded-2xl bg-white p-4 ring-1 ring-slate-200"><p class="font-bold">Pre-registro en línea</p><p class="text-sm text-slate-500">Registra tu interés y terminas en el centro</p></div>
     </div>
 
@@ -105,13 +104,11 @@
           <div id="detalle" class="rounded-3xl bg-slate-50 p-6 ring-1 ring-slate-200 lg:col-span-2"></div>
           <div class="space-y-4">
             <div class="rounded-2xl bg-amber-50 p-5 ring-1 ring-amber-200"><p class="font-bold">Aviso importante</p><p class="mt-1 text-sm text-slate-700" data-aviso></p></div>
-            <div class="rounded-2xl bg-sky-50 p-5 ring-1 ring-sky-200"><p class="font-bold">¿Ya comenzó o está lleno?</p><p class="mt-1 text-sm text-slate-600">Igual puedes dejar tu pre-registro como interesado y te tomamos en cuenta para el siguiente ciclo.</p></div>
-            <div class="rounded-2xl bg-green-50 p-5 ring-1 ring-green-200"><p class="font-bold">Consulta sin conexión</p><p class="mt-1 text-sm text-slate-600">Puedes instalarla en el celular y ver el catálogo aun sin señal. Para pre-registrarte sí necesitas internet.</p></div>
-          </div>
+            <div class="rounded-2xl bg-sky-50 p-5 ring-1 ring-sky-200"><p class="font-bold">¿Ya comenzó o está lleno?</p><p class="mt-1 text-sm text-slate-600">Igual puedes dejar tu pre-registro como interesado y te tomamos en cuenta para el siguiente ciclo.</p></div>          </div>
         </div>
         <ol class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <li class="rounded-2xl p-5 ring-1 ring-slate-200"><span class="text-sm font-bold text-indigo-700">01</span><p class="mt-1 font-bold">Consulta el catálogo</p><p class="text-sm text-slate-600">Talleres por categoría y grupo.</p></li>
-          <li class="rounded-2xl p-5 ring-1 ring-slate-200"><span class="text-sm font-bold text-indigo-700">02</span><p class="mt-1 font-bold">Pre-regístrate</p><p class="text-sm text-slate-600">Con una auxiliar del centro. Recibes tu folio por WhatsApp.</p></li>
+          <li class="rounded-2xl p-5 ring-1 ring-slate-200"><span class="text-sm font-bold text-indigo-700">02</span><p class="mt-1 font-bold">Pre-regístrate</p><p class="text-sm text-slate-600">Con una auxiliar del centro. Recibes tu folio al terminar.</p></li>
           <li class="rounded-2xl p-5 ring-1 ring-slate-200"><span class="text-sm font-bold text-indigo-700">03</span><p class="mt-1 font-bold">Junta tus documentos</p><p class="text-sm text-slate-600">Revisa qué pide tu taller en la sección de requisitos.</p></li>
           <li class="rounded-2xl p-5 ring-1 ring-slate-200"><span class="text-sm font-bold text-indigo-700">04</span><p class="mt-1 font-bold">Acude al centro</p><p class="text-sm text-slate-600">Ahí terminas tu inscripción y aseguras tu lugar.</p></li>
         </ol>
@@ -183,7 +180,7 @@
           <input name="tutor" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5" autocomplete="off"></label>
         <label class="block text-sm font-medium"><span id="lbl-participante">Nombre completo</span>
           <input name="participante" required class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5" autocomplete="off"></label>
-        <label class="block text-sm font-medium">Comunidad (colonia)
+        <label class="block text-sm font-medium">Comunidad
           <input name="comunidad" required class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5" autocomplete="off"></label>
         <label class="block text-sm font-medium"><span id="lbl-telefono">Teléfono (10 dígitos)</span>
           <input name="telefono" type="tel" inputmode="numeric" required class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5" autocomplete="off" placeholder="664 123 4567"></label>
@@ -221,7 +218,6 @@
         <ul id="listo-docs" class="mt-1 list-inside list-disc text-slate-600"></ul>
       </div>
       <div class="mt-6 flex flex-col gap-3">
-        <a id="listo-wa" target="_blank" class="rounded-xl bg-green-600 py-3 text-center font-semibold text-white hover:bg-green-700">Enviar comprobante por WhatsApp</a>
         <button type="button" onclick="otroPreregistro()" class="rounded-xl py-3 font-semibold ring-1 ring-slate-300 hover:bg-slate-50">Nuevo pre-registro en este taller</button>
         <button type="button" onclick="cerrarFormulario()" class="py-2 text-sm font-semibold text-slate-500 hover:text-slate-800">Cerrar</button>
       </div>

@@ -1,5 +1,5 @@
 // Lógica de la landing: estados y cupos, filtros por categoría, detalle,
-// formulario de pre-registro (solo interés), comprobante por WhatsApp y catálogo en PDF.
+// formulario de pre-registro (solo interés) y catálogo en PDF.
 
 const URL_API = "https://script.google.com/macros/s/AKfycbxxAGCWZv0G1L5NnFexd7EhV5d-GipMzONM6tb2uYL10yF0jKAHtFm7xbdPzqxVAFS7/exec";
 const CLAVE_COPIA = "talleres-copia-v2";
@@ -15,9 +15,9 @@ const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
 const leer = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
 
 const ICONO_CAT = {
-  "Niños y Jóvenes": "🧒", "Belleza y Cuidado Personal": "💅", "Cocina y Repostería": "🧁",
-  "Tecnología e Innovación": "💻", "Oficios y Capacitación CECATI": "🛠️",
-  "Manualidades y Emprendimiento": "🧵", "Deportes y Bienestar Adultos": "🏃"
+  "Niños y Jóvenes": "", "Belleza y Cuidado Personal": "", "Cocina y Repostería": "",
+  "Tecnología e Innovación": "", "Oficios y Capacitación CECATI": "",
+  "Manualidades y Emprendimiento": "", "Deportes y Bienestar Adultos": ""
 };
 
 // Estado de cada taller según sus fechas y cupos (vienen de la pestaña del taller).
@@ -281,27 +281,6 @@ async function enviarPreregistro(ev) {
   }
 }
 
-function textoComprobante(r, folio, requisitos) {
-  const t = tallerForm, c = datos.config;
-  return [
-    `*${c.centro}*`,
-    `Comprobante de PRE-REGISTRO`,
-    ``,
-    `Folio: *${folio}*`,
-    `Taller: ${t.nombre}`,
-    `Inicia: ${fechaLarga(t.inicio)} · ${t.dias || ""} ${t.horario || ""}`.trim(),
-    `Participante: ${r.participante}${r.tutor ? " (tutor: " + r.tutor + ")" : ""}`,
-    ``,
-    `⚠️ *AVISO IMPORTANTE:* ${c.aviso}`,
-    ``,
-    `Documentos que debes llevar:`,
-    ...(requisitos || t.requisitos || []).map(x => `• ${x}`),
-    ``,
-    `📍 ${c.direccion}`,
-    c.maps
-  ].join("\n");
-}
-
 function mostrarListo(r, resp) {
   const t = tallerForm;
   const requisitos = resp.requisitos || t.requisitos;
@@ -311,7 +290,6 @@ function mostrarListo(r, resp) {
     (r.condicion ? ` Como indicó una condición especial, el centro lo canalizará a valoración con psicopedagogía antes de la inscripción.` : "");
   document.getElementById("listo-folio").textContent = resp.folio;
   document.getElementById("listo-docs").innerHTML = requisitos.map(x => `<li>${esc(x)}</li>`).join("");
-  document.getElementById("listo-wa").href = `https://wa.me/52${r.telefono}?text=${encodeURIComponent(textoComprobante(r, resp.folio, requisitos))}`;
   document.getElementById("paso-form").classList.add("hidden");
   document.getElementById("paso-listo").classList.remove("hidden");
 }
