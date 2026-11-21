@@ -1,0 +1,5 @@
+# Archivos internos que no deben quedar públicos en la web
+graphify-out/
+.claude/
+Codigo.gs
+LEEME.md
