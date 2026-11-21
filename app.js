@@ -73,7 +73,8 @@ function linkWhatsApp(texto) {
 
 function pintarTodo() {
   const conLugares = datos.talleres.filter(t => t.conLugares);
-  document.getElementById("num-talleres").textContent = `${datos.talleres.length} talleres · ${conLugares.length} con lugares`;
+  document.getElementById("num-talleres").textContent = `${datos.talleres.length} talleres`;
+  document.getElementById("num-disponibles").textContent = conLugares.length;
   document.getElementById("actualizado").textContent =
     (datos.sinConexion ? "Sin conexión · copia del " : "Actualizado ") +
     new Date(datos.actualizado).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
@@ -109,7 +110,7 @@ function pintarResumen(t) {
 }
 
 function filtros() {
-  const f = { "Todos": () => true, "Con lugares": t => t.conLugares };
+  const f = { "Todos": () => true, "Disponibles": t => t.conLugares };
   datos.categorias.forEach(c => f[c] = t => t.categoria === c);
   return f;
 }
