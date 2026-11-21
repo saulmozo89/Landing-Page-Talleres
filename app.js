@@ -302,14 +302,15 @@ function otroPreregistro() { abrirFormulario(tallerForm.id); }
 function descargarPDF() {
   const cat = document.getElementById("pdf-categoria").value;
   const c = datos.config;
-  const lista = datos.talleres.filter(t => t.estado !== "Terminado" && (!cat || t.categoria === cat));
+  // Solo talleres con lugares (mismo criterio que el filtro "Disponibles").
+  const lista = datos.talleres.filter(t => t.conLugares && (!cat || t.categoria === cat));
   const fecha = new Date(datos.actualizado).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
   const secciones = datos.categorias.filter(k => lista.some(t => t.categoria === k)).map(k => `
     <section class="pdf-seccion">
       <h2>${ICONO_CAT[k] || ""} ${esc(k)}</h2>
       ${lista.filter(t => t.categoria === k).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(t => `
         <div class="pdf-ficha">
-          <div class="pdf-fila"><h3>${esc(t.nombre)}</h3><span>${t.estado === "Cupo lleno" ? "Cupo lleno" : `${t.disponibles} de ${t.cupo} lugares`}</span></div>
+          <div class="pdf-fila"><h3>${esc(t.nombre)}</h3><span>${t.disponibles} de ${t.cupo} lugares</span></div>
           <p>${esc(t.descripcion)}</p>
           <p><b>Fechas:</b> ${fechaLarga(t.inicio)} al ${fechaLarga(t.fin)} · <b>Días y horario:</b> ${esc(t.dias) || "Por definir"}${t.horario ? ", " + esc(t.horario) : ""}</p>
           <p><b>Edad:</b> ${esc(textoEdad(t))} · <b>Lleva:</b> ${esc((t.requisitos || []).join(", "))}</p>
@@ -322,7 +323,7 @@ function descargarPDF() {
       <p>${cat ? esc(cat) + " · " : ""}Actualizado al ${fecha}${datos.sinConexion ? " (sin conexión: últimos datos guardados)" : ""}</p>
       <p>${esc(c.direccion)} · WhatsApp ${esc(c.telefono)}</p>
     </div>
-    ${secciones || "<p>No hay talleres en esta categoría.</p>"}
+    ${secciones || "<p>Por ahora no hay talleres con lugares disponibles" + (cat ? " en esta categoría" : "") + ".</p>"}
     <p class="pdf-aviso"><b>AVISO IMPORTANTE:</b> ${esc(c.aviso)}</p>`;
   window.print();
 }
